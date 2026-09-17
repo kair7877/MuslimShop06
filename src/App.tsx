@@ -19,9 +19,11 @@ import { AdminPanel } from './components/AdminPanel';
 import { Footer } from './components/Footer';
 import { PrayerTimesWidget } from './components/PrayerTimesWidget';
 import { ExitConfirmModal } from './components/ExitConfirmModal';
+import { RecentlyViewed } from './components/RecentlyViewed';
 import { Search, SlidersHorizontal, ShoppingBag, X, Clock, Sparkles } from 'lucide-react';
 
 const CART_STORAGE_KEY = 'muslim_shop_cart_v1';
+const RECENTLY_VIEWED_STORAGE_KEY = 'muslim_shop_recently_viewed_v1';
 
 export default function App() {
   // Persistence & Core Domain State
@@ -49,6 +51,17 @@ export default function App() {
       console.error('Failed to persist cart', e);
     }
   }, [cart]);
+
+  // Session-based Recently Viewed Products State
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = sessionStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Real-time Cloud Sync with Firebase Firestore
   useEffect(() => {
@@ -148,6 +161,17 @@ export default function App() {
     lastOpenedProductIdRef.current = product.id;
 
     setSelectedProduct(product);
+
+    // Track recently viewed product in current session (up to 12 items, newest first)
+    setRecentlyViewedIds((prev) => {
+      const updated = [product.id, ...prev.filter((id) => id !== product.id)].slice(0, 12);
+      try {
+        sessionStorage.setItem(RECENTLY_VIEWED_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to save recently viewed to sessionStorage', e);
+      }
+      return updated;
+    });
 
     // Push entry to browser history so mobile/browser "Назад" closes the product modal
     try {
@@ -519,6 +543,24 @@ export default function App() {
     }
   };
 
+  // Recently Viewed Products memo and clear handler
+  const recentlyViewedProducts = useMemo(() => {
+    if (recentlyViewedIds.length === 0) return [];
+    const productMap = new Map(products.map((p) => [p.id, p]));
+    return recentlyViewedIds
+      .map((id) => productMap.get(id))
+      .filter((p): p is Product => Boolean(p && !p.isHidden));
+  }, [recentlyViewedIds, products]);
+
+  const handleClearRecentlyViewed = () => {
+    setRecentlyViewedIds([]);
+    try {
+      sessionStorage.removeItem(RECENTLY_VIEWED_STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed to clear recently viewed from sessionStorage', e);
+    }
+  };
+
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Selected Category Object
@@ -692,7 +734,20 @@ export default function App() {
           )}
         </section>
 
-        {/* 6. Trust & Quality Banner with 1-click WhatsApp messaging */}
+        {/* 6. Recently Viewed Products (Current Session) */}
+        {recentlyViewedProducts.length > 0 && (
+          <RecentlyViewed
+            products={recentlyViewedProducts}
+            language={language}
+            whatsappNumber={settings.whatsappNumber}
+            onSelectProduct={(p) => handleOpenProduct(p)}
+            onAddToCart={(p) => handleAddToCart(p, 1)}
+            onBuyNow={(p) => handleBuyNow(p, 1)}
+            onClear={handleClearRecentlyViewed}
+          />
+        )}
+
+        {/* 7. Trust & Quality Banner with 1-click WhatsApp messaging */}
         <section className="bg-gradient-to-r from-[#121218] via-[#161622] to-[#121218] border-y border-[#22222E] py-8 px-4 my-6">
           <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
             <div className="flex flex-col items-center">

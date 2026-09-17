@@ -55,6 +55,9 @@ export const translations = {
     resultsFound: 'Найдено товаров',
     noProductsFound: 'По вашему запросу товары не найдены',
     addedSuccess: 'Добавлено в корзину!',
+    recentlyViewed: 'Недавно просмотренные',
+    recentlyViewedSubtitle: 'Товары, которые вы открывали в этой сессии',
+    clearRecentlyViewed: 'Очистить историю',
 
     // 1-Click WhatsApp & No-payment flow
     oneClickWhatsApp: 'Заказать в 1 клик через WhatsApp',
@@ -249,6 +252,9 @@ export const translations = {
     resultsFound: 'Табылған тауарлар',
     noProductsFound: 'Сұрауыңыз бойынша ештеңе табылмады',
     addedSuccess: 'Себетке сәтті қосылды!',
+    recentlyViewed: 'Жақында қаралғандар',
+    recentlyViewedSubtitle: 'Осы сессияда қаралған тауарлар',
+    clearRecentlyViewed: 'Тарихты тазарту',
 
     // 1-Click WhatsApp & No-payment flow
     oneClickWhatsApp: '1 басумен WhatsApp-та тапсырыс беру',
