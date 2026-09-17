@@ -7,7 +7,7 @@ import { storageService } from './services/storageService';
 import { translations } from './translations';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
-import { CategoryNav } from './components/CategoryNav';
+import { CategoryGrid, PRIMARY_CATEGORIES, EXPANDED_CATEGORIES, isProductMatchingCategory } from './components/CategoryGrid';
 import { ProductCard } from './components/ProductCard';
 import { ProductModal } from './components/ProductModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -20,7 +20,7 @@ import { Footer } from './components/Footer';
 import { PrayerTimesWidget } from './components/PrayerTimesWidget';
 import { ExitConfirmModal } from './components/ExitConfirmModal';
 import { RecentlyViewed } from './components/RecentlyViewed';
-import { Search, SlidersHorizontal, ShoppingBag, X, Clock, Sparkles } from 'lucide-react';
+import { Search, SlidersHorizontal, ShoppingBag, X, Clock, Sparkles, Flame, ArrowRight } from 'lucide-react';
 
 const CART_STORAGE_KEY = 'muslim_shop_cart_v1';
 const RECENTLY_VIEWED_STORAGE_KEY = 'muslim_shop_recently_viewed_v1';
@@ -467,13 +467,7 @@ export default function App() {
 
       // Category matching
       if (selectedCategoryId) {
-        if (selectedCategoryId === 'cat-hits' && !product.isHit) return false;
-        else if (selectedCategoryId === 'cat-new' && !product.isNew) return false;
-        else if (
-          selectedCategoryId !== 'cat-hits' &&
-          selectedCategoryId !== 'cat-new' &&
-          product.categoryId !== selectedCategoryId
-        ) {
+        if (!isProductMatchingCategory(product, selectedCategoryId)) {
           return false;
         }
       }
@@ -523,6 +517,35 @@ export default function App() {
     });
   }, [products, selectedCategoryId, onlyInStock, onlySale, searchQuery, sortBy, categories]);
 
+  // Curated Hit Products for Homepage
+  const hitProducts = useMemo(() => {
+    return products
+      .filter((p) => !p.isHidden && (p.isHit || p.categoryId === 'cat-hits'))
+      .slice(0, 8);
+  }, [products]);
+
+  // Curated New Arrivals for Homepage
+  const newProducts = useMemo(() => {
+    return products
+      .filter((p) => !p.isHidden && (p.isNew || p.categoryId === 'cat-new'))
+      .slice(0, 8);
+  }, [products]);
+
+  // Selected Category Object & Title
+  const currentCategoryTitle = useMemo(() => {
+    if (!selectedCategoryId) return t.allProducts;
+    const allGridCats = [...PRIMARY_CATEGORIES, ...EXPANDED_CATEGORIES];
+    const gridMatch = allGridCats.find((c) => c.id === selectedCategoryId);
+    if (gridMatch) {
+      return `${gridMatch.icon} ${language === 'kz' ? gridMatch.nameKz : gridMatch.nameRu}`;
+    }
+    const currentCategory = categories.find((c) => c.id === selectedCategoryId);
+    if (currentCategory) {
+      return `${currentCategory.icon || '📦'} ${language === 'ru' ? currentCategory.nameRu : (currentCategory.nameKz || currentCategory.nameRu)}`;
+    }
+    return t.allProducts;
+  }, [selectedCategoryId, language, categories, t.allProducts]);
+
   // Mobile Bottom Navigation Tab Switcher
   const handleMobileNavTab = (tab: 'home' | 'search' | 'catalog' | 'prayer' | 'cart' | 'admin') => {
     setMobileTab(tab);
@@ -563,12 +586,6 @@ export default function App() {
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Selected Category Object
-  const currentCategory = categories.find((c) => c.id === selectedCategoryId);
-  const currentCategoryTitle = currentCategory
-    ? language === 'ru' ? currentCategory.nameRu : (currentCategory.nameKz || currentCategory.nameRu)
-    : t.allProducts;
-
   return (
     <div className="min-h-screen bg-[#0B0B0E] text-[#F4F1EA] flex flex-col selection:bg-[#D4AF37]/30 selection:text-[#E8D49E]">
       {/* 1. Header with Language RU/KZ, 2GIS, Instagram, Prayer Times, Search, Cart */}
@@ -590,42 +607,17 @@ export default function App() {
       />
 
       <main className="flex-grow">
-        {/* 2. Hero Section */}
-        <Hero
-          language={language}
-          settings={settings}
-          onScrollToCatalog={handleScrollToCatalog}
-        />
+        {/* 2. Desktop Hero Banner (hidden on mobile for instant categories focus) */}
+        <div className="hidden md:block">
+          <Hero
+            language={language}
+            settings={settings}
+            onScrollToCatalog={handleScrollToCatalog}
+          />
+        </div>
 
-        {/* 3. Prayer Times Feature Card on Homepage */}
-        <section ref={prayerRef} className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 pb-2">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#68D391] animate-pulse" />
-              <span className="text-xs font-semibold text-[#68D391] uppercase tracking-wider">
-                {t.prayerTimesTitle}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowPrayerOnHomepage(!showPrayerOnHomepage)}
-              className="text-[11px] text-[#A6A29A] hover:text-[#D4AF37] transition-colors"
-            >
-              {showPrayerOnHomepage 
-                ? (language === 'kz' ? 'Жасыру' : 'Свернуть') 
-                : (language === 'kz' ? 'Көрсету' : 'Показать расписание')}
-            </button>
-          </div>
-
-          {showPrayerOnHomepage && (
-            <div className="animate-in fade-in duration-300">
-              <PrayerTimesWidget language={language} />
-            </div>
-          )}
-        </section>
-
-        {/* 4. Horizontal Categories ribbon immediately after Hero */}
-        <CategoryNav
-          categories={categories}
+        {/* 3. Modern Category Grid (2 columns x 3 rows on mobile, expandable) */}
+        <CategoryGrid
           selectedCategoryId={selectedCategoryId}
           onSelectCategory={(id) => {
             setSelectedCategoryId(id);
@@ -634,105 +626,311 @@ export default function App() {
           language={language}
         />
 
-        {/* 5. Main Product Catalog Section */}
-        <section ref={catalogRef} className="max-w-7xl mx-auto px-3 sm:px-6 py-8">
-          {/* Quick Search & Filter bar on catalog header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />
-                <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#F4F1EA]">
-                  {currentCategoryTitle}
-                </h2>
-                <span className="text-xs text-[#8C877D] font-mono">
-                  ({filteredProducts.length})
-                </span>
+        {/* 4. Product Catalog Blocks */}
+        {!selectedCategoryId && !searchQuery.trim() && !onlyInStock && !onlySale ? (
+          <>
+            {/* Block 1: 🔥 Хиты продаж */}
+            {hitProducts.length > 0 && (
+              <section className="max-w-7xl mx-auto px-3 sm:px-6 pt-6 pb-4">
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg sm:text-xl">🔥</span>
+                    <div>
+                      <h3 className="font-serif text-base sm:text-xl font-bold text-[#F4F1EA] flex items-center gap-2">
+                        <span>{language === 'kz' ? 'Хит өнімдер' : 'Хиты продаж'}</span>
+                        <span className="text-[11px] sm:text-xs font-mono text-[#D4AF37] px-2 py-0.5 rounded-full bg-[#1F1B12] border border-[#D4AF37]/30">
+                          {hitProducts.length}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-[#8C877D]">
+                        {language === 'kz' ? 'Ең көп сұранысқа ие тауарлар' : 'Самые популярные позиции каталога'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedCategoryId('cat-hits');
+                      handleScrollToCatalog();
+                    }}
+                    className="text-xs text-[#D4AF37] hover:text-[#F4E3B2] font-medium flex items-center gap-1 group cursor-pointer"
+                  >
+                    <span>{language === 'kz' ? 'Барлығын көру' : 'Смотреть все'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+                  {hitProducts.slice(0, 4).map((product) => (
+                    <ProductCard
+                      key={`hit-${product.id}`}
+                      product={product}
+                      language={language}
+                      whatsappNumber={settings.whatsappNumber}
+                      onSelectProduct={(p) => handleOpenProduct(p)}
+                      onAddToCart={(p) => handleAddToCart(p, 1)}
+                      onBuyNow={(p) => handleBuyNow(p, 1)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Block 2: ✨ Новинки */}
+            {newProducts.length > 0 && (
+              <section className="max-w-7xl mx-auto px-3 sm:px-6 pt-6 pb-4">
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg sm:text-xl">✨</span>
+                    <div>
+                      <h3 className="font-serif text-base sm:text-xl font-bold text-[#F4F1EA] flex items-center gap-2">
+                        <span>{language === 'kz' ? 'Жаңа өнімдер' : 'Новинки'}</span>
+                        <span className="text-[11px] sm:text-xs font-mono text-[#D4AF37] px-2 py-0.5 rounded-full bg-[#1F1B12] border border-[#D4AF37]/30">
+                          {newProducts.length}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-[#8C877D]">
+                        {language === 'kz' ? 'Жаңадан түскен тауарлар' : 'Свежие поступления в магазин'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedCategoryId('cat-new');
+                      handleScrollToCatalog();
+                    }}
+                    className="text-xs text-[#D4AF37] hover:text-[#F4E3B2] font-medium flex items-center gap-1 group cursor-pointer"
+                  >
+                    <span>{language === 'kz' ? 'Барлығын көру' : 'Смотреть все'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+                  {newProducts.slice(0, 4).map((product) => (
+                    <ProductCard
+                      key={`new-${product.id}`}
+                      product={product}
+                      language={language}
+                      whatsappNumber={settings.whatsappNumber}
+                      onSelectProduct={(p) => handleOpenProduct(p)}
+                      onAddToCart={(p) => handleAddToCart(p, 1)}
+                      onBuyNow={(p) => handleBuyNow(p, 1)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Block 3: Рекомендуемые товары / Каталог с поиском и фильтром */}
+            <section ref={catalogRef} className="max-w-7xl mx-auto px-3 sm:px-6 pt-6 pb-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />
+                    <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#F4F1EA]">
+                      {language === 'kz' ? 'Ұсынылатын тауарлар' : 'Рекомендуемые товары'}
+                    </h2>
+                    <span className="text-xs text-[#8C877D] font-mono">
+                      ({filteredProducts.length})
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#8C877D] mt-0.5">
+                    {language === 'kz' ? 'Ассортименттегі барлық тауарлар' : 'Все товары из ассортимента магазина'}
+                  </p>
+                </div>
+
+                {/* Quick search input and filter button */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="w-4 h-4 text-[#8C877D] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t.searchPlaceholder}
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#14141C] border border-[#262634] text-xs text-[#F4F1EA] placeholder-[#706B62] focus:border-[#D4AF37] outline-none transition-colors"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#8C877D]"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setIsSearchFilterOpen(true)}
+                    className={`p-2 sm:px-3 sm:py-2 rounded-xl border flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      onlyInStock || onlySale || sortBy !== 'popular'
+                        ? 'bg-[#252535] border-[#D4AF37] text-[#D4AF37]'
+                        : 'bg-[#14141C] border-[#262634] text-[#A6A29A] hover:text-[#F4F1EA]'
+                    }`}
+                    title={t.filters}
+                  >
+                    <SlidersHorizontal className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="hidden sm:inline">{t.filters}</span>
+                  </button>
+                </div>
               </div>
-              {searchQuery && (
-                <div className="text-xs text-[#C5A059] mt-0.5">
-                  {language === 'kz' ? 'Сұраныс бойынша іздеу:' : 'Поиск по запросу:'} «{searchQuery}»
+
+              {/* Product Grid: 2 columns on mobile, 4 columns on desktop */}
+              {filteredProducts.length === 0 ? (
+                <div className="py-16 text-center bg-[#13131A] rounded-3xl border border-[#242432] p-8">
+                  <div className="w-16 h-16 rounded-full bg-[#181822] border border-[#2B2B3C] flex items-center justify-center mx-auto mb-3 text-[#C5A059]">
+                    <ShoppingBag className="w-7 h-7" />
+                  </div>
+                  <h3 className="font-serif text-lg font-bold text-[#F4F1EA] mb-1">
+                    {t.noProductsFound}
+                  </h3>
+                  <p className="text-xs text-[#8C877D] max-w-sm mx-auto mb-5">
+                    {language === 'kz' 
+                      ? 'Іздеу сұрауын өзгертіп көріңіз немесе сүзгілерді тазартыңыз' 
+                      : 'Попробуйте изменить поисковый запрос или сбросить фильтры'}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategoryId(null);
+                      setOnlyInStock(false);
+                      setOnlySale(false);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-[#C5A059] text-[#0B0B0E] font-bold text-xs cursor-pointer"
+                  >
+                    {t.resetFilters}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+                  {filteredProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      language={language}
+                      whatsappNumber={settings.whatsappNumber}
+                      onSelectProduct={(p) => handleOpenProduct(p)}
+                      onAddToCart={(p) => handleAddToCart(p, 1)}
+                      onBuyNow={(p) => handleBuyNow(p, 1)}
+                    />
+                  ))}
                 </div>
               )}
-            </div>
-
-            {/* Quick search input and filter button */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="w-4 h-4 text-[#8C877D] absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t.searchPlaceholder}
-                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#14141C] border border-[#262634] text-xs text-[#F4F1EA] placeholder-[#706B62] focus:border-[#D4AF37] outline-none transition-colors"
-                />
+            </section>
+          </>
+        ) : (
+          /* Filtered or Searched Catalog Section */
+          <section ref={catalogRef} className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />
+                  <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#F4F1EA]">
+                    {currentCategoryTitle}
+                  </h2>
+                  <span className="text-xs text-[#8C877D] font-mono">
+                    ({filteredProducts.length})
+                  </span>
+                </div>
+                {selectedCategoryId && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      onClick={() => {
+                        setSelectedCategoryId(null);
+                        setSearchQuery('');
+                      }}
+                      className="text-xs text-[#D4AF37] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>✕ {language === 'kz' ? 'Сүзгіні тазарту' : 'Показать все товары'}</span>
+                    </button>
+                  </div>
+                )}
                 {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#8C877D]"
-                  >
-                    ✕
-                  </button>
+                  <div className="text-xs text-[#C5A059] mt-0.5">
+                    {language === 'kz' ? 'Сұраныс бойынша іздеу:' : 'Поиск по запросу:'} «{searchQuery}»
+                  </div>
                 )}
               </div>
 
-              <button
-                onClick={() => setIsSearchFilterOpen(true)}
-                className={`p-2 sm:px-3 sm:py-2 rounded-xl border flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                  onlyInStock || onlySale || sortBy !== 'popular'
-                    ? 'bg-[#252535] border-[#D4AF37] text-[#D4AF37]'
-                    : 'bg-[#14141C] border-[#262634] text-[#A6A29A] hover:text-[#F4F1EA]'
-                }`}
-                title={t.filters}
-              >
-                <SlidersHorizontal className="w-4 h-4 text-[#D4AF37]" />
-                <span className="hidden sm:inline">{t.filters}</span>
-              </button>
-            </div>
-          </div>
+              {/* Quick search input and filter button */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-4 h-4 text-[#8C877D] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t.searchPlaceholder}
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#14141C] border border-[#262634] text-xs text-[#F4F1EA] placeholder-[#706B62] focus:border-[#D4AF37] outline-none transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#8C877D]"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
 
-          {/* Product Grid: 2 columns on mobile, 4 columns on desktop */}
-          {filteredProducts.length === 0 ? (
-            <div className="py-16 text-center bg-[#13131A] rounded-3xl border border-[#242432] p-8">
-              <div className="w-16 h-16 rounded-full bg-[#181822] border border-[#2B2B3C] flex items-center justify-center mx-auto mb-3 text-[#C5A059]">
-                <ShoppingBag className="w-7 h-7" />
+                <button
+                  onClick={() => setIsSearchFilterOpen(true)}
+                  className={`p-2 sm:px-3 sm:py-2 rounded-xl border flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                    onlyInStock || onlySale || sortBy !== 'popular'
+                      ? 'bg-[#252535] border-[#D4AF37] text-[#D4AF37]'
+                      : 'bg-[#14141C] border-[#262634] text-[#A6A29A] hover:text-[#F4F1EA]'
+                  }`}
+                  title={t.filters}
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-[#D4AF37]" />
+                  <span className="hidden sm:inline">{t.filters}</span>
+                </button>
               </div>
-              <h3 className="font-serif text-lg font-bold text-[#F4F1EA] mb-1">
-                {t.noProductsFound}
-              </h3>
-              <p className="text-xs text-[#8C877D] max-w-sm mx-auto mb-5">
-                {language === 'kz' 
-                  ? 'Іздеу сұрауын өзгертіп көріңіз немесе сүзгілерді тазартыңыз' 
-                  : 'Попробуйте изменить поисковый запрос или сбросить фильтры'}
-              </p>
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategoryId(null);
-                  setOnlyInStock(false);
-                  setOnlySale(false);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-[#C5A059] text-[#0B0B0E] font-bold text-xs cursor-pointer"
-              >
-                {t.resetFilters}
-              </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  language={language}
-                  whatsappNumber={settings.whatsappNumber}
-                  onSelectProduct={(p) => handleOpenProduct(p)}
-                  onAddToCart={(p) => handleAddToCart(p, 1)}
-                  onBuyNow={(p) => handleBuyNow(p, 1)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+
+            {/* Product Grid: 2 columns on mobile, 4 columns on desktop */}
+            {filteredProducts.length === 0 ? (
+              <div className="py-16 text-center bg-[#13131A] rounded-3xl border border-[#242432] p-8">
+                <div className="w-16 h-16 rounded-full bg-[#181822] border border-[#2B2B3C] flex items-center justify-center mx-auto mb-3 text-[#C5A059]">
+                  <ShoppingBag className="w-7 h-7" />
+                </div>
+                <h3 className="font-serif text-lg font-bold text-[#F4F1EA] mb-1">
+                  {t.noProductsFound}
+                </h3>
+                <p className="text-xs text-[#8C877D] max-w-sm mx-auto mb-5">
+                  {language === 'kz' 
+                    ? 'Іздеу сұрауын өзгертіп көріңіз немесе сүзгілерді тазартыңыз' 
+                    : 'Попробуйте изменить поисковый запрос или сбросить фильтры'}
+                </p>
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategoryId(null);
+                    setOnlyInStock(false);
+                    setOnlySale(false);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-[#C5A059] text-[#0B0B0E] font-bold text-xs cursor-pointer"
+                >
+                  {t.resetFilters}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+                {filteredProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    language={language}
+                    whatsappNumber={settings.whatsappNumber}
+                    onSelectProduct={(p) => handleOpenProduct(p)}
+                    onAddToCart={(p) => handleAddToCart(p, 1)}
+                    onBuyNow={(p) => handleBuyNow(p, 1)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* 6. Recently Viewed Products (Current Session) */}
         {recentlyViewedProducts.length > 0 && (

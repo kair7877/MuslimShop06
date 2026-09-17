@@ -191,6 +191,23 @@ export const translations = {
     newBadge: 'NEW',
     saleBadge: 'СКИДКА',
 
+    // Sharing & Direct Links
+    share: 'Поделиться',
+    copyLink: 'Скопировать ссылку',
+    linkCopied: 'Ссылка скопирована ✓',
+    shareInWhatsApp: 'Поделиться в WhatsApp',
+    shareInTelegram: 'Поделиться в Telegram',
+    shareForStories: 'Для Instagram Stories',
+    storiesHelp: 'Вставьте ссылку в стикер «Ссылка» в вашей Истории',
+    moreShareOptions: 'Другие приложения',
+    directProductLink: 'Прямая ссылка на товар',
+    backToCatalog: 'В каталог',
+    productNotFound: 'Товар не найден',
+    productNotFoundDesc: 'Возможно, ссылка устарела или товар временно отсутствует в продаже.',
+    adminProductSlug: 'SEO URL (slug)',
+    adminSlugHint: 'Уникальная ссылка на товар (генерируется автоматически)',
+    adminCopyLinkBtn: 'Скопировать прямую ссылку',
+
     // Footer
     footerAbout: 'MUSLIM SHOP Атырау — эксклюзивный бутик сертифицированных натуральных товаров для здоровья, красоты и мусульманского образа жизни. ТД «Байзар», 2 этаж, бутик №24.',
     footerContacts: 'Контакты',
@@ -387,6 +404,23 @@ export const translations = {
     hitBadge: 'ХИТ',
     newBadge: 'ЖАҢА',
     saleBadge: 'ЖЕҢІЛДІК',
+
+    // Sharing & Direct Links
+    share: 'Бөлісу',
+    copyLink: 'Сілтемені көшіру',
+    linkCopied: 'Сілтеме көшірілді ✓',
+    shareInWhatsApp: 'WhatsApp-та бөлісу',
+    shareInTelegram: 'Telegram-да бөлісу',
+    shareForStories: 'Instagram Stories үшін',
+    storiesHelp: 'Сілтемені Stories-тегі «Сілтеме» стикеріне қойыңыз',
+    moreShareOptions: 'Басқа қолданбалар',
+    directProductLink: 'Тауардың тікелей сілтемесі',
+    backToCatalog: 'Каталогқа қайту',
+    productNotFound: 'Тауар табылмады',
+    productNotFoundDesc: 'Мүмкін, сілтеме ескірген немесе тауар сатылымнан алынған.',
+    adminProductSlug: 'SEO URL (slug)',
+    adminSlugHint: 'Тауарға арналған бірегей сілтеме (автоматты түрде жасалады)',
+    adminCopyLinkBtn: 'Тікелей сілтемені көшіру',
 
     // Footer
     footerAbout: 'MUSLIM SHOP Атырау — денсаулық, сұлулық және мұсылмандық өмір салтына арналған премиум сертификатталған табиғи өнімдер бутигі. ТД «Байзар», 2 қабат, №24 бутик.',

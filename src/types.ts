@@ -10,6 +10,7 @@ export interface Category {
 
 export interface Product {
   id: string;
+  slug?: string;
   titleRu: string;
   titleKz?: string;
   price: number;
