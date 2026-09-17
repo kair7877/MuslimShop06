@@ -11,9 +11,9 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ settings, language, onOpenAdmin }) => {
   const t = translations[language];
-  const cleanPhone = settings.whatsappNumber.replace(/\D/g, '');
-  const gis2Url = settings.gis2Url || 'https://2gis.kz/atyrau/geo/70000001094546376';
-  const instagramHandle = settings.instagram?.replace('@', '') || 'musliim_shop06';
+  const cleanPhone = (settings?.whatsappNumber || '77781754241').replace(/\D/g, '');
+  const gis2Url = settings?.gis2Url || 'https://2gis.kz/atyrau/geo/70000001094546376';
+  const instagramHandle = (settings?.instagram || 'musliim_shop06').replace('@', '');
 
   return (
     <footer className="bg-[#0D0D12] border-t border-[#1F1F2A] text-[#9A968E] pt-10 pb-24 sm:pb-12 px-4 sm:px-6">

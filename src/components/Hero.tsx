@@ -11,8 +11,8 @@ interface HeroProps {
 
 export const Hero: React.FC<HeroProps> = ({ language, settings, onScrollToCatalog }) => {
   const t = translations[language];
-  const gis2Url = settings.gis2Url || 'https://2gis.kz/atyrau/geo/70000001094546376';
-  const instagramHandle = settings.instagram?.replace('@', '') || 'musliim_shop06';
+  const gis2Url = settings?.gis2Url || 'https://2gis.kz/atyrau/geo/70000001094546376';
+  const instagramHandle = (settings?.instagram ? String(settings.instagram) : 'musliim_shop06').replace('@', '');
   const addressDisplay = language === 'ru'
     ? 'пр. Султана Бейбарыса, 45а/5'
     : 'Сұлтан Бейбарыс даңғылы, 45а/5';

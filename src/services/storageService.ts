@@ -5,7 +5,8 @@ import {
   doc, 
   onSnapshot, 
   setDoc, 
-  deleteDoc 
+  deleteDoc,
+  getDocs
 } from 'firebase/firestore';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { indexedDbService, IDB_STORES } from './indexedDbService';
@@ -366,8 +367,8 @@ class StorageService {
             snapshot.forEach((docSnap) => {
               const data = docSnap.data() as Product;
               let createdAt = data.createdAt;
-              if (!createdAt && docSnap.id.startsWith('prod-')) {
-                const ts = Number(docSnap.id.replace('prod-', ''));
+              if (!createdAt && docSnap.id && docSnap.id.startsWith('prod-')) {
+                const ts = Number(String(docSnap.id).replace('prod-', ''));
                 if (!isNaN(ts) && ts > 0) {
                   createdAt = new Date(ts).toISOString();
                 }
@@ -668,15 +669,46 @@ class StorageService {
           if (!snapshot.empty) {
             const list: Order[] = [];
             snapshot.forEach((docSnap) => {
-              const d = docSnap.data() as Order;
-              // Clean out the legacy demo order ord-1001 if present in Firestore
-              if (d.id === 'ord-1001') {
-                deleteDoc(doc(db, 'orders', 'ord-1001')).catch(() => {});
-              } else {
-                list.push(d);
+              const d = docSnap.data() as any;
+              // Clean out legacy demo or corrupted test documents
+              if (
+                !d ||
+                d.id === 'ord-1001' ||
+                docSnap.id === 'ord-1001' ||
+                docSnap.id === 'test1' ||
+                (!Array.isArray(d.items) && !d.orderNumber && !d.clientName)
+              ) {
+                this.ensureAdminAuth().then(() => {
+                  deleteDoc(doc(db, 'orders', docSnap.id)).catch(() => {});
+                });
+                return;
               }
+
+              const normalizedOrder: Order = {
+                id: d.id || docSnap.id,
+                orderNumber: d.orderNumber || `#${String(docSnap.id).replace(/\D/g, '').slice(-4) || '1001'}`,
+                clientName: d.clientName || 'Покупатель',
+                phone: d.phone || '',
+                whatsapp: d.whatsapp || d.phone || '',
+                city: d.city || 'Атырау',
+                address: d.address || 'Самовывоз',
+                deliveryMethod: d.deliveryMethod || 'delivery',
+                paymentMethod: d.paymentMethod || 'whatsapp',
+                items: Array.isArray(d.items) ? d.items : [],
+                totalAmount: typeof d.totalAmount === 'number' && !isNaN(d.totalAmount) ? d.totalAmount : 0,
+                status: d.status || 'new',
+                createdAt: d.createdAt || new Date().toISOString(),
+                comment: d.comment || '',
+              };
+              list.push(normalizedOrder);
             });
-            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            list.sort((a, b) => {
+              const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+            });
+
             this.saveOrdersLocal(list);
             callback(list);
           } else {
@@ -684,7 +716,7 @@ class StorageService {
           }
         },
         (error) => {
-          console.warn('Firestore orders sync error:', error);
+          console.warn('Firestore orders sync notice:', error);
           callback(this.getOrders());
         }
       );
@@ -707,8 +739,22 @@ class StorageService {
         return [];
       }
       const parsed = JSON.parse(data);
-      // Clean out legacy demo order ord-1001 if stored previously
-      const cleaned = Array.isArray(parsed) ? parsed.filter((o: Order) => o.id !== 'ord-1001') : [];
+      // Clean out legacy demo order ord-1001, test1, or broken items
+      const cleaned: Order[] = Array.isArray(parsed)
+        ? parsed
+            .filter((o: any) => o && o.id !== 'ord-1001' && o.id !== 'test1' && (Array.isArray(o.items) || o.orderNumber))
+            .map((o: any) => ({
+              ...o,
+              items: Array.isArray(o.items) ? o.items : [],
+              totalAmount: typeof o.totalAmount === 'number' && !isNaN(o.totalAmount) ? o.totalAmount : 0,
+              createdAt: o.createdAt || new Date().toISOString(),
+              orderNumber: o.orderNumber || '#1001',
+              clientName: o.clientName || 'Покупатель',
+              phone: o.phone || '',
+              status: o.status || 'new',
+            }))
+        : [];
+
       if (cleaned.length !== (parsed ? parsed.length : 0)) {
         this.saveOrdersLocal(cleaned);
       }
@@ -733,7 +779,7 @@ class StorageService {
   public createOrder(orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'status'>): Order {
     const orders = this.getOrders();
     const nextNum = orders.length > 0
-      ? Math.max(...orders.map((o) => parseInt(o.orderNumber.replace(/\D/g, '') || '1000', 10))) + 1
+      ? Math.max(...orders.map((o) => parseInt(String(o?.orderNumber || '').replace(/\D/g, '') || '1000', 10))) + 1
       : 1001;
 
     const newOrder: Order = {
@@ -747,13 +793,13 @@ class StorageService {
     orders.unshift(newOrder);
     this.saveOrdersLocal(orders);
 
-    try {
+    this.ensureAdminAuth().then(() => {
       setDoc(doc(db, 'orders', newOrder.id), cleanForFirestore(newOrder)).catch((err) => {
         console.error('Error saving order to Firestore:', err);
       });
-    } catch (e) {
-      console.error('Failed to save order to Firestore:', e);
-    }
+    }).catch((e) => {
+      console.error('Failed to authenticate for order saving:', e);
+    });
 
     return newOrder;
   }
@@ -762,13 +808,13 @@ class StorageService {
     const orders = this.getOrders().map((o) => (o.id === orderId ? { ...o, status } : o));
     this.saveOrdersLocal(orders);
 
-    try {
+    this.ensureAdminAuth().then(() => {
       setDoc(doc(db, 'orders', orderId), { status }, { merge: true }).catch((err) => {
         console.error('Error updating order status in Firestore:', err);
       });
-    } catch (e) {
-      console.error('Failed to update order status in Firestore:', e);
-    }
+    }).catch((e) => {
+      console.error('Failed to authenticate for order update:', e);
+    });
 
     return orders;
   }
@@ -777,25 +823,38 @@ class StorageService {
     const orders = this.getOrders().filter((o) => o.id !== orderId);
     this.saveOrdersLocal(orders);
 
-    try {
+    this.ensureAdminAuth().then(() => {
       deleteDoc(doc(db, 'orders', orderId)).catch((err) => {
         console.error('Error deleting order from Firestore:', err);
       });
-    } catch (e) {
-      console.error('Failed to delete order from Firestore:', e);
-    }
+    }).catch((e) => {
+      console.error('Failed to authenticate for order delete:', e);
+    });
 
     return orders;
   }
 
   public clearAllOrders(): Order[] {
     const orders = this.getOrders();
-    for (const o of orders) {
-      try {
-        deleteDoc(doc(db, 'orders', o.id)).catch(() => {});
-      } catch {}
-    }
     this.saveOrdersLocal([]);
+
+    this.ensureAdminAuth().then(async () => {
+      for (const o of orders) {
+        deleteDoc(doc(db, 'orders', o.id)).catch(() => {});
+      }
+      try {
+        const colRef = collection(db, 'orders');
+        const snap = await getDocs(colRef);
+        snap.forEach((d) => {
+          deleteDoc(doc(db, 'orders', d.id)).catch(() => {});
+        });
+      } catch (err) {
+        console.error('Error clearing orders collection:', err);
+      }
+    }).catch((e) => {
+      console.error('Failed to authenticate for clearAllOrders:', e);
+    });
+
     return [];
   }
 

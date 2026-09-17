@@ -488,11 +488,11 @@ export default function App() {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const category = categories.find((c) => c.id === product.categoryId);
-        const matchTitle = product.titleRu.toLowerCase().includes(q) || (product.titleKz?.toLowerCase().includes(q) ?? false);
-        const matchDesc = product.descriptionRu.toLowerCase().includes(q) || (product.descriptionKz?.toLowerCase().includes(q) ?? false);
+        const matchTitle = (product.titleRu || '').toLowerCase().includes(q) || (product.titleKz?.toLowerCase().includes(q) ?? false);
+        const matchDesc = (product.descriptionRu || '').toLowerCase().includes(q) || (product.descriptionKz?.toLowerCase().includes(q) ?? false);
         const matchSpecs = product.specsRu?.toLowerCase().includes(q) || (product.specsKz?.toLowerCase().includes(q) ?? false);
         const matchSku = product.sku?.toLowerCase().includes(q) ?? false;
-        const matchCat = category?.nameRu.toLowerCase().includes(q) || (category?.nameKz.toLowerCase().includes(q) ?? false);
+        const matchCat = (category?.nameRu || '').toLowerCase().includes(q) || (category?.nameKz?.toLowerCase().includes(q) ?? false);
 
         if (!matchTitle && !matchDesc && !matchSpecs && !matchSku && !matchCat) {
           return false;

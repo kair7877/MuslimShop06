@@ -65,6 +65,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Active Tab: products | categories | orders | settings | database
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'orders' | 'settings' | 'database'>('products');
   const [orderFilter, setOrderFilter] = useState<'all' | OrderStatus>('all');
+  const [confirmClearAllOrders, setConfirmClearAllOrders] = useState(false);
+  const [orderToDeleteId, setOrderToDeleteId] = useState<string | null>(null);
 
   // Product Editing State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -657,17 +659,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 {orders.length > 0 && onClearAllOrders && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Вы действительно хотите удалить все заказы из базы данных? Это действие нельзя отменить.')) {
-                        onClearAllOrders();
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-[#241717] hover:bg-[#341F1F] text-[#FC8181] hover:text-[#FFA8A8] text-xs font-semibold border border-[#482020] flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Очистить все заказы</span>
-                  </button>
+                  <div>
+                    {confirmClearAllOrders ? (
+                      <div className="flex items-center gap-2 bg-[#2E1414] p-1.5 px-3 rounded-xl border border-[#5C2323]">
+                        <span className="text-xs text-[#FFA8A8] font-medium">Удалить все заказы?</span>
+                        <button
+                          onClick={() => {
+                            onClearAllOrders();
+                            setConfirmClearAllOrders(false);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-[#C53030] hover:bg-[#E53E3E] text-white text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          Да, очистить
+                        </button>
+                        <button
+                          onClick={() => setConfirmClearAllOrders(false)}
+                          className="px-2 py-1 rounded-lg bg-[#1B1B26] hover:bg-[#252535] text-[#D6D2C9] text-xs transition-colors cursor-pointer"
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmClearAllOrders(true)}
+                        className="px-3 py-1.5 rounded-xl bg-[#241717] hover:bg-[#341F1F] text-[#FC8181] hover:text-[#FFA8A8] text-xs font-semibold border border-[#482020] flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Очистить все заказы</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -684,7 +705,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ].map((filter) => {
                     const count = filter.id === 'all' 
                       ? orders.length 
-                      : orders.filter((o) => o.status === filter.id).length;
+                      : orders.filter((o) => o?.status === filter.id).length;
 
                     return (
                       <button
@@ -723,7 +744,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {filteredOrders.map((order) => {
-                    const clientPhoneClean = (order.whatsapp || order.phone).replace(/\D/g, '');
+                    const rawPhone = String(order?.whatsapp || order?.phone || '');
+                    const clientPhoneClean = rawPhone.replace(/\D/g, '');
+                    const items = Array.isArray(order?.items) ? order.items : [];
+                    const orderDate = order?.createdAt ? new Date(order.createdAt) : null;
+                    const isValidDate = orderDate && !isNaN(orderDate.getTime());
+                    const formattedDate = isValidDate
+                      ? orderDate.toLocaleString('ru-RU', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : '—';
+
+                    const isDeletingThis = orderToDeleteId === order.id;
 
                     return (
                       <div
@@ -732,25 +767,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       >
                         <div>
                           {/* Header: Number, Date, Status Select & Delete button */}
-                          <div className="flex items-center justify-between border-b border-[#22222E] pb-3 mb-3 gap-2">
+                          <div className="flex items-center justify-between border-b border-[#22222E] pb-3 mb-3 gap-2 flex-wrap">
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-base font-bold text-[#D4AF37]">
-                                {order.orderNumber}
+                                {order.orderNumber || '#1001'}
                               </span>
                               <span className="text-[11px] text-[#8C877D]">
-                                {new Date(order.createdAt).toLocaleString('ru-RU', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
+                                {formattedDate}
                               </span>
                             </div>
 
                             <div className="flex items-center gap-2">
                               {/* Status select dropdown */}
                               <select
-                                value={order.status}
+                                value={order.status || 'new'}
                                 onChange={(e) => onUpdateOrderStatus(order.id, e.target.value as OrderStatus)}
                                 className="text-xs px-2.5 py-1 rounded-lg bg-[#1E1E2C] border border-[#303042] text-[#F4F1EA] outline-none cursor-pointer"
                               >
@@ -762,20 +792,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 <option value="cancelled">Отменён</option>
                               </select>
 
-                              {/* Delete single order button */}
+                              {/* Delete single order with inline confirm (no window.confirm in iframe) */}
                               {onDeleteOrder && (
-                                <button
-                                  onClick={() => {
-                                    if (window.confirm(`Удалить заказ ${order.orderNumber}?`)) {
-                                      onDeleteOrder(order.id);
-                                    }
-                                  }}
-                                  className="p-1.5 rounded-lg bg-[#241717] hover:bg-[#341F1F] text-[#FC8181] hover:text-[#FFA8A8] border border-[#482020] transition-colors cursor-pointer"
-                                  title="Удалить заказ"
-                                  aria-label="Удалить заказ"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <div>
+                                  {isDeletingThis ? (
+                                    <div className="flex items-center gap-1.5 bg-[#2E1414] px-2 py-1 rounded-lg border border-[#5C2323]">
+                                      <span className="text-[11px] text-[#FFA8A8]">Удалить?</span>
+                                      <button
+                                        onClick={() => {
+                                          onDeleteOrder(order.id);
+                                          setOrderToDeleteId(null);
+                                        }}
+                                        className="px-1.5 py-0.5 rounded bg-[#C53030] hover:bg-[#E53E3E] text-white text-[10px] font-bold transition-colors cursor-pointer"
+                                      >
+                                        Да
+                                      </button>
+                                      <button
+                                        onClick={() => setOrderToDeleteId(null)}
+                                        className="px-1.5 py-0.5 rounded bg-[#1B1B26] text-[#D6D2C9] text-[10px] transition-colors cursor-pointer"
+                                      >
+                                        Нет
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setOrderToDeleteId(order.id)}
+                                      className="p-1.5 rounded-lg bg-[#241717] hover:bg-[#341F1F] text-[#FC8181] hover:text-[#FFA8A8] border border-[#482020] transition-colors cursor-pointer"
+                                      title="Удалить заказ"
+                                      aria-label="Удалить заказ"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -784,18 +833,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs mb-3">
                             <div>
                               <span className="text-[#8C877D] block">Клиент:</span>
-                              <strong className="text-[#F4F1EA]">{order.clientName}</strong>
+                              <strong className="text-[#F4F1EA]">{order.clientName || 'Покупатель'}</strong>
                             </div>
                             <div>
                               <span className="text-[#8C877D] block">Телефон:</span>
-                              <a href={`tel:${order.phone}`} className="text-[#D4AF37] hover:underline">
-                                {formatPhone(order.phone)}
-                              </a>
+                              {order.phone ? (
+                                <a href={`tel:${order.phone}`} className="text-[#D4AF37] hover:underline">
+                                  {formatPhone(order.phone)}
+                                </a>
+                              ) : (
+                                <span className="text-[#8C877D]">Не указан</span>
+                              )}
                             </div>
                             <div className="sm:col-span-2">
                               <span className="text-[#8C877D] block">Способ и адрес:</span>
                               <span className="text-[#D6D2C9]">
-                                {order.deliveryMethod === 'pickup' ? '🏪 Самовывоз' : '🚚 Доставка'}: {order.address} ({order.city})
+                                {order.deliveryMethod === 'pickup' ? '🏪 Самовывоз' : '🚚 Доставка'}: {order.address || '—'} {order.city ? `(${order.city})` : ''}
                               </span>
                             </div>
                             {order.comment && (
@@ -810,14 +863,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <div className="text-[10px] uppercase font-semibold text-[#C5A059] tracking-wider mb-1">
                               Состав заказа:
                             </div>
-                            {order.items.map((it, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-[#D6D2C9]">
-                                <span className="truncate pr-2">• {it.title} × {it.quantity}</span>
-                                <span className="font-medium whitespace-nowrap text-[#F4F1EA]">
-                                  {formatTenge(it.price * it.quantity)}
-                                </span>
+                            {items.length === 0 ? (
+                              <div className="text-[11px] text-[#8C877D] italic">
+                                Список товаров пуст
                               </div>
-                            ))}
+                            ) : (
+                              items.map((it, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-[#D6D2C9]">
+                                  <span className="truncate pr-2">• {it?.title || 'Товар'} × {it?.quantity || 1}</span>
+                                  <span className="font-medium whitespace-nowrap text-[#F4F1EA]">
+                                    {formatTenge((it?.price || 0) * (it?.quantity || 1))}
+                                  </span>
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
 
@@ -826,13 +885,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <div>
                             <span className="text-[10px] text-[#8C877D] uppercase block">Итого:</span>
                             <span className="font-serif text-lg font-bold text-[#D4AF37]">
-                              {formatTenge(order.totalAmount)}
+                              {formatTenge(order.totalAmount || 0)}
                             </span>
                           </div>
 
                           {clientPhoneClean && (
                             <a
-                              href={`https://wa.me/${clientPhoneClean}?text=${encodeURIComponent(`Здравствуйте, ${order.clientName}! По поводу вашего заказа ${order.orderNumber} в магазине MUSLIM SHOP...`)}`}
+                              href={`https://wa.me/${clientPhoneClean}?text=${encodeURIComponent(`Здравствуйте, ${order.clientName || 'клиент'}! По поводу вашего заказа ${order.orderNumber || ''} в магазине MUSLIM SHOP...`)}`}
                               target="_blank"
                               rel="noreferrer"
                               className="px-3.5 py-2 rounded-xl bg-[#22543D] hover:bg-[#276749] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -915,7 +974,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <input
                     type="text"
                     value={settingsForm.whatsappNumber}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, whatsappNumber: e.target.value.replace(/\D/g, '') })}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, whatsappNumber: (e.target.value || '').replace(/\D/g, '') })}
                     placeholder="77781754241"
                     className="w-full px-3 py-2 rounded-xl bg-[#171722] border border-[#2A2A38] text-sm text-[#F4F1EA] outline-none"
                   />
